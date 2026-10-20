@@ -124,3 +124,12 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 8px; }
 .dialog { width: min(480px, 100%); background: linear-gradient(180deg, rgba(32,32,36,.95), rgba(20,20,23,.95)); border: 1px solid var(--line-2); border-radius: 22px; padding: 32px; box-shadow: 0 40px 100px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06); }
 .dialog h1 { margin: 0 0 8px; font: 700 26px/1.15 var(--display); letter-spacing: -.01em; }
 .dialog p { margin: 0 0 20px; color: var(--muted); }
+
+/* pulsante accesso Google */
+.glogin { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.gbtn { display: inline-flex; align-items: center; gap: 12px; height: 48px; padding: 0 24px 0 16px; border-radius: 99px; border: 0; background: #fff; color: #1f1f1f; font: 600 15px var(--body); cursor: pointer; box-shadow: 0 10px 30px -10px rgba(255,255,255,.35); transition: transform .1s, box-shadow .2s; }
+.gbtn:hover { box-shadow: 0 12px 36px -8px rgba(255,255,255,.45); }
+.gbtn:active { transform: translateY(1px); }
+.gbtn:disabled { opacity: .7; cursor: progress; }
+.gerr { color: #ffb020; font-size: 13px; max-width: 420px; text-align: center; min-height: 0; }
+.gerr:empty { display: none; }
