@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%227%22 fill=%22%23ff3b30%22/%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entra in diretta</title>
+<link rel="stylesheet" href="ui.css">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  body { min-height: 100vh; }
+  .pre { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .pre-card { width: min(920px, 100%); display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; align-items: center; }
+  .preview { position: relative; aspect-ratio: 16/9; background: #000; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+  .preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .preview .meter { position: absolute; left: 14px; right: 14px; bottom: 14px; height: 5px; background: rgba(0,0,0,.5); }
+  .preview .off { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 20px; }
+  .pre h1 { font: 700 28px/1.15 var(--display); letter-spacing: -.01em; margin: 0 0 8px; }
+  .pre p.sub { color: var(--muted); margin: 0 0 22px; }
+  .pre .tips { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+
+  .room { display: none; height: 100vh; height: 100dvh; grid-template-rows: 1fr auto; }
+  .room.on { display: grid; }
+  .room-main { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+  .room-main.nochat { grid-template-columns: 1fr; }
+  .view { position: relative; display: grid; place-items: center; padding: 20px; min-height: 0; min-width: 0; }
+  .view video.prog { width: 100%; max-height: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; object-fit: contain; box-shadow: 0 0 0 1px var(--line); }
+  .status { position: absolute; top: 32px; left: 32px; display: flex; gap: 8px; }
+  .self { position: absolute; right: 32px; bottom: 32px; width: min(190px, 22%); aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 0 0 2px var(--line), 0 10px 30px rgba(0,0,0,.5); }
+  .self video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .waiting { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 30px; pointer-events: none; }
+  .waiting b { color: var(--text); font-size: 18px; display: block; margin-bottom: 6px; }
+  .chat { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; padding: 14px; gap: 10px; min-height: 0; }
+  .chat h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .bar { display: flex; justify-content: center; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  .bar .btn { height: 44px; padding: 0 16px; border-radius: 12px; }
+  .bar .btn.off { background: var(--accent-soft); border-color: var(--accent); color: #ff8a82; }
+  .ended { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: var(--bg); z-index: 60; }
+  .tap { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.6); z-index: 5; }
+
+  @media (max-width: 800px) {
+    .pre-card { grid-template-columns: 1fr; }
+    .room-main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .chat { border-left: 0; border-top: 1px solid var(--line); max-height: 40vh; }
+    .view { padding: 12px; }
+    .status { top: 22px; left: 22px; }
+    .self { right: 22px; bottom: 22px; width: 32%; }
+    .bar .btn .lbl { display: none; }
+    .bar .btn { width: 48px; padding: 0; }
+  }
+</style>
+</head>
+<body>
+<section class="pre" id="pre">
+  <div class="pre-card">
+    <div class="preview">
+      <video id="preview" muted playsinline autoplay></video>
+      <div class="off hidden" id="previewOff">Videocamera non disponibile.<br>Puoi entrare solo con il microfono.</div>
+      <div class="meter"><i id="preMeter"></i></div>
+    </div>
+    <div>
+      <h1>Stai per entrare in diretta</h1>
+      <p class="sub">Entrerai prima nel backstage: sarà la regia a mandarti in onda.</p>
+      <label class="field"><span>Il tuo nome (comparirà in diretta)</span><input class="input" id="name" maxlength="40" placeholder="Nome e cognome"></label>
+      <label class="field"><span>Videocamera</span><select class="input" id="cam"></select></label>
+      <label class="field"><span>Microfono</span><select class="input" id="mic"></select></label>
+      <button class="btn primary" id="joinBtn" style="width:100%;height:46px" disabled>Entra nello studio</button>
+      <p class="tips">Usa le cuffie per evitare l’eco. Funziona meglio con Chrome, Edge o Safari aggiornati.</p>
+      <p class="tips" id="preErr" style="color:#ff8a82"></p>
+    </div>
+  </div>
+</section>
+
+<section class="room" id="room">
+  <div class="room-main" id="roomMain">
+    <div class="view">
+      <video class="prog" id="prog" playsinline autoplay></video>
+      <div class="waiting" id="waiting"><div><b>In attesa della regia…</b>Tra poco vedrai qui la diretta.</div></div>
+      <div class="status"><span class="pill" id="airPill"><span class="dot"></span>BACKSTAGE</span><span class="pill live hidden" id="recPill"><span class="dot"></span>REC</span></div>
+      <div class="self"><video id="self" muted playsinline autoplay></video></div>
+      <div class="tap hidden" id="tap"><button class="btn primary" id="tapBtn">Attiva l’audio</button></div>
+    </div>
+    <aside class="chat" id="chat">
+      <h3>Chat con la regia</h3>
+      <div class="chat-list" id="chatList"></div>
+      <form class="chat-form" id="chatForm"><input class="input" id="chatInput" placeholder="Scrivi…" autocomplete="off"><button class="btn sm primary">Invia</button></form>
+    </aside>
+  </div>
+  <div class="bar">
+    <button class="btn" id="micBtn"></button>
+    <button class="btn" id="camBtn"></button>
+    <button class="btn" id="screenBtn"></button>
+    <button class="btn" id="chatBtn"></button>
+    <button class="btn danger" id="leaveBtn"></button>
+  </div>
+</section>
+
+<div class="ended hidden" id="ended"><div><h1 id="endedTitle">Sei uscito dallo studio</h1><p class="sub" id="endedSub" style="color:var(--muted)">Grazie per aver partecipato!</p><button class="btn" onclick="location.reload()">Rientra</button></div></div>
+
+<script type="module" src="join.js"></script>
+</body>
+</html>

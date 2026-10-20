@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%227%22 fill=%22%23ff3d2e%22/%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StudioLive · Regia</title>
+<link rel="stylesheet" href="ui.css">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <span class="tally" id="tally"></span>
+      <span class="wordmark">Studio<em>Live</em></span>
+    </div>
+
+    <div class="top-mid">
+      <div class="linkbox" id="inviteBox" title="Manda questo link agli ospiti">
+        <span class="lb-label" data-icon="link"></span>
+        <span class="lb-text" id="inviteText">Apro il link ospiti…</span>
+        <button class="btn sm primary" id="copyInvite" disabled>Copia link ospiti</button>
+      </div>
+      <button class="btn sm" id="copyObs" title="Da incollare in OBS come Browser Source"><span data-icon="obs"></span>Link OBS</button>
+    </div>
+
+    <div class="top-right">
+      <div class="clock mono" id="clock">00:00:00</div>
+      <span class="pill" id="obsPill"><span class="dot"></span>OBS non collegato</span>
+      <button class="rec" id="recBtn"><span class="rec-dot"></span><span id="recLabel">REC</span></button>
+      <div class="user-wrap">
+        <button class="user" id="userChip" title="Il tuo account"></button>
+        <div class="user-menu hidden" id="userMenu">
+          <small id="userEmail"></small>
+          <button class="btn sm" id="logoutBtn"><span data-icon="leave"></span>Esci</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="stage">
+      <div class="stats">
+        <div class="stat"><span>Ospiti</span><b id="statGuests">0</b></div>
+        <div class="stat"><span>In onda</span><b id="statOnAir">0</b></div>
+        <div class="stat"><span>Uscita OBS</span><b id="statObs">—</b></div>
+        <div class="stat"><span>Registrazione</span><b id="statRec">Ferma</b><small class="stat-sub" id="statRecDest"></small></div>
+        <div class="stat wide"><span>Audio diretta</span><div class="meter big"><i id="masterMeter"></i></div></div>
+      </div>
+
+      <div class="monitor" id="monitor">
+        <div class="mon-head">
+          <span class="pgm">PGM</span>
+          <span class="mon-info mono">1920×1080 · 30 FPS</span>
+          <span class="mon-state mono" id="pgmState">Anteprima</span>
+        </div>
+        <div class="program-wrap">
+          <canvas id="program"></canvas>
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="hidden-warn hidden" id="hiddenWarn">La regia non è visibile: la diretta può bloccarsi. Tieni questa finestra aperta e in primo piano.</div>
+        </div>
+        <div class="layoutbar">
+          <div class="layouts" id="layouts"></div>
+          <div class="layout-extra">
+            <label class="switch"><input type="checkbox" id="namesToggle" checked> Nomi</label>
+            <button class="btn sm" id="pauseBtn"><span data-icon="pause"></span>Pausa</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="strip-head">
+        <div class="sh-title"><h2>Backstage</h2><span class="muted mono" id="countLabel"></span></div>
+        <div class="strip-actions">
+          <button class="btn sm" id="hostMic"></button>
+          <button class="btn sm" id="hostCam"></button>
+          <button class="btn sm" id="hostScreen"><span data-icon="screen"></span>Condividi schermo</button>
+        </div>
+      </div>
+      <div class="strip" id="strip"></div>
+      <div class="strip-empty" id="stripEmpty">
+        <div class="se-icon" data-icon="users"></div>
+        <div><b>Ancora nessun ospite</b><span>Copia il link in alto e mandalo: chi entra compare qui, pronto per andare in onda.</span></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <nav class="tabs" id="tabs">
+        <button data-tab="banner" class="active"><span data-icon="type"></span>Banner</button>
+        <button data-tab="style"><span data-icon="drop"></span>Stile</button>
+        <button data-tab="chat"><span data-icon="chat"></span>Chat<i class="badge hidden" id="chatBadge"></i></button>
+        <button data-tab="settings"><span data-icon="sliders"></span>Setup</button>
+      </nav>
+
+      <div class="tab" data-panel="banner">
+        <h3>Banner</h3>
+        <p class="hint">Clicca un banner per mandarlo in onda, ricliccalo per toglierlo.</p>
+        <div class="banners" id="bannerList"></div>
+        <form class="banner-form" id="bannerForm">
+          <input class="input" id="bTitle" placeholder="Titolo (es. Tony Gallitto)" maxlength="90">
+          <input class="input" id="bSub" placeholder="Sottotitolo (facoltativo)" maxlength="120">
+          <button class="btn sm" type="submit"><span data-icon="plus"></span>Aggiungi banner</button>
+        </form>
+        <h3>Scritta che scorre</h3>
+        <textarea class="input" id="tickerText" placeholder="Es. Seguimi su Instagram @tony.gallitto.ai • Scrivi la tua domanda in chat"></textarea>
+        <label class="switch row-gap"><input type="checkbox" id="tickerToggle"> Mostra in onda</label>
+        <h3>Schermata pausa</h3>
+        <input class="input" id="pauseText" placeholder="Torniamo subito">
+      </div>
+
+      <div class="tab hidden" data-panel="style">
+        <h3>Colore principale</h3>
+        <div class="swatches" id="swatches"></div>
+        <div class="row2">
+          <label class="field"><span>Testo</span><input type="color" id="textColor"></label>
+          <label class="field"><span>Sfondo</span><input type="color" id="bgColor"></label>
+        </div>
+        <label class="field"><span>Angoli arrotondati</span><input type="range" id="radius" min="0" max="40"></label>
+        <h3>Immagini</h3>
+        <div class="asset" data-asset="logo"><div class="asset-prev"></div><div><b>Logo</b><small>In alto a destra · PNG trasparente</small></div><div class="asset-btns"></div></div>
+        <div class="asset" data-asset="bgImage"><div class="asset-prev"></div><div><b>Sfondo</b><small>1920×1080 consigliato</small></div><div class="asset-btns"></div></div>
+        <div class="asset" data-asset="overlay"><div class="asset-prev"></div><div><b>Overlay</b><small>Cornice PNG sopra tutto</small></div><div class="asset-btns"></div></div>
+      </div>
+
+      <div class="tab hidden chat-tab" data-panel="chat">
+        <h3>Chat con gli ospiti</h3>
+        <p class="hint">La vedono solo regia e ospiti, non va in diretta.</p>
+        <div class="chat-list" id="chatList"></div>
+        <form class="chat-form" id="chatForm"><input class="input" id="chatInput" placeholder="Scrivi agli ospiti…" autocomplete="off"><button class="btn sm primary">Invia</button></form>
+      </div>
+
+      <div class="tab hidden" data-panel="settings">
+        <h3>Tu</h3>
+        <label class="field"><span>Il tuo nome in onda</span><input class="input" id="hostName"></label>
+        <label class="field"><span>Videocamera</span><select class="input" id="camSelect"></select></label>
+        <label class="field"><span>Microfono</span><select class="input" id="micSelect"></select></label>
+        <h3>Audio</h3>
+        <label class="field"><span>Volume generale</span><input type="range" id="masterVol" min="0" max="150" value="100"></label>
+        <label class="switch row-gap"><input type="checkbox" id="monitorToggle" checked> Senti gli ospiti in regia (cuffie)</label>
+        <h3>OBS</h3>
+        <ol class="howto">
+          <li><b>Fonti → + → Browser</b></li>
+          <li>URL: il <b>Link OBS</b> in alto · <b>1920 × 1080</b></li>
+          <li>Spunta <b>"Controlla l'audio tramite OBS"</b></li>
+        </ol>
+        <p class="hint">Il link OBS funziona da qualsiasi computer: anche dal Mac dove gira OBS.</p>
+        <h3>Registrazioni</h3>
+        <div class="rec-settings" id="recSettings"></div>
+        <h3>Link ospiti</h3>
+        <p class="hint">Rigenerare scollega gli ospiti presenti e annulla il link vecchio.</p>
+        <button class="btn sm" id="regenInvite"><span data-icon="refresh"></span>Rigenera link ospiti</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="scrim welcome" id="startScrim">
+  <div class="dialog">
+    <div class="w-badge mono"><span class="tally on"></span>Regia pronta</div>
+    <h1>Pronto per andare<br>in onda?</h1>
+    <ol class="w-steps">
+      <li><b>01</b><span><strong>Entra in regia</strong>Camera e microfono si accendono qui.</span></li>
+      <li><b>02</b><span><strong>Invita gli ospiti</strong>Un link, niente da installare.</span></li>
+      <li><b>03</b><span><strong>Collega OBS</strong>Browser Source, e da lì Twitch o YouTube.</span></li>
+    </ol>
+    <button class="btn primary" id="startBtn" style="width:100%;height:50px;font-size:15px">Entra in regia</button>
+    <p class="hint" id="startErr" style="margin-top:12px;color:#ff9a8f"></p>
+  </div>
+</div>
+
+<div class="scrim hidden" id="recScrim">
+  <div class="dialog rec-dialog">
+    <div class="w-badge mono"><span class="tally on"></span>Registrazione</div>
+    <h1>Cosa registro?</h1>
+    <div class="rec-settings" id="recDialogBody"></div>
+    <div class="rec-actions">
+      <button class="btn" id="recCancel">Annulla</button>
+      <button class="btn primary" id="recGo"><span class="rec-dot" style="background:#fff"></span>Avvia registrazione</button>
+    </div>
+  </div>
+</div>
+
+<div id="mediaPool" aria-hidden="true"></div>
+<script type="module" src="studio.js"></script>
+</body>
+</html>
