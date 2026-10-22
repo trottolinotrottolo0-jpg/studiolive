@@ -313,6 +313,7 @@
       return;
     }
     el.innerHTML = '';
+    if (first) { const d = document.createElement('a'); d.className = 'switch-acc'; d.href = 'studio.html' + qs; d.textContent = 'Entra subito senza Google →'; d.style.cssText = 'display:block;margin-top:12px;font-weight:600'; el.parentElement.append(d); }
     renderLogin(el, () => { location.href = 'studio.html' + qs; }).catch(() => {
       el.innerHTML = `<button class="fake-g" disabled><span class="g">${G}</span>Google non raggiungibile</button>`;
     });

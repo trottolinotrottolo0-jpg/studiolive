@@ -12,8 +12,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
 // ---------- accesso obbligatorio ----------
-const USER = getUser();
-if (!USER) { location.replace('index.html' + location.search); throw new Error('accesso richiesto'); }
+// accesso Google facoltativo: senza, si entra lo stesso (Drive si collega dalla finestra REC)
+const USER = getUser() || { sub: 'local', name: 'Tony', email: '', picture: '' };
 const SKEY = `studiolive:settings:${USER.sub}`;
 const drive = new Drive(USER);
 let recDir = null; // cartella scelta sul computer (FileSystemDirectoryHandle)
@@ -23,7 +23,7 @@ const PART_MS = 30 * 60 * 1000;
 const DEFAULTS = {
   hostName: (USER.name || 'Tony').split(' ')[0],
   room: '', hostKey: '', guestKey: '',
-  recProgram: true, recPeople: true, recDest: 'drive',
+  recProgram: true, recPeople: true, recDest: USER.sub === 'local' && 'showDirectoryPicker' in window ? 'local' : 'drive',
   brand: { color: '#ff3b30', textColor: '#ffffff', bgColor: '#0e1014', radius: 18, logo: null, bgImage: null, overlay: null },
   banners: [{ id: 'b1', title: 'Benvenuti in diretta!', sub: 'Scrivete le vostre domande in chat' }],
   ticker: '',
