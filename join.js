@@ -228,7 +228,7 @@ function recStart(kind, stream, name) {
     return new Promise((resolve, reject) => {
       urlWaiters.set(kind, { session, resolve: (url) => resolve(new DriveSink(url)), reject });
       signal.send({ type: 'rec-request', kind, session, ext: type.ext, mime: type.base });
-      setTimeout(() => { if (urlWaiters.get(kind)?.session === session) { urlWaiters.delete(kind); reject(new Error('La regia non risponde')); } }, 30000);
+      setTimeout(() => { if (urlWaiters.get(kind)?.session === session) { urlWaiters.delete(kind); reject(new Error('La regia non risponde')); } }, 600_000);
     });
   };
   const r = new ChunkRecorder({

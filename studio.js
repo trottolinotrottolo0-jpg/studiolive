@@ -50,6 +50,8 @@ const assetUrls = {};
 const remoteSinks = new Map(); // file che gli ospiti mandano alla regia (salvataggio su cartella)
 const sessionDirs = new Map();
 const urlWaiters = new Map();
+const remoteClosing = new Set();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let info = {};
 let mixer, comp, programVideo, iceServers, signal;
 let hostCam = null, hostScreen = null;
@@ -305,9 +307,8 @@ function sendStatus(peerId) {
 function onRecStatus(id, m) {
   const p = peers.get(id);
   if (!p) return;
-  p.rec = m;
-  const cam = sources.get(`${id}:cam`);
-  if (cam) updateCard(cam);
+  p.rec = { ...(p.rec || {}), [m.kind || 'cam']: m };
+  for (const kind of ['cam', 'screen']) { const s = sources.get(`${id}:${kind}`); if (s) updateCard(s); }
 }
 
 function updateObsPill() {
@@ -362,18 +363,47 @@ function stopRec() {
   live.rec = null;
   for (const id of peers.keys()) sendStatus(id);
   updateRecUI();
-  toast('Registrazione fermata: finisco di salvare i file…');
-  Promise.all(done.map((r) => r.drain())).then(() => {
+  toast('Registrazione fermata: finisco di salvare i file (anche quelli degli ospiti)…', 5000);
+  live.saving = true;
+  Promise.all([...done.map((r) => r.drain()), guestsSaved()]).then(([...res]) => {
+    live.saving = false;
     const err = done.find((r) => r.error);
-    if (err) return toast('Attenzione: un file non è stato salvato bene (' + err.error + ').', 8000);
-    toast(rec.dest === 'drive' ? 'Registrazione salvata su Google Drive ✓' : 'Registrazione salvata nella cartella ✓', 5000);
+    if (err) return toast('Attenzione: un file non è stato salvato bene (' + err.error + ').', 10000);
+    const left = res.pop();
+    if (left.length) return toast(`Attenzione: il file di ${left.join(', ')} potrebbe non essere completo (ospite scollegato o lento). Controlla la cartella.`, 12000);
+    toast(rec.dest === 'drive' ? 'Registrazione salvata su Google Drive ✓ (tutti i file)' : 'Registrazione salvata nella cartella ✓ (tutti i file)', 6000);
   });
+}
+
+// aspetta che ogni ospite abbia finito di caricare/mandare i suoi file; restituisce chi non ha finito
+async function guestsSaved(maxMs = 300_000) {
+  const t0 = Date.now();
+  await sleep(2500); // il tempo che l'ospite riceva lo stop
+  const busy = () => [...peers.values()].filter((p) => p.role === 'guest' && p.rec && Object.values(p.rec).some((r) => ['rec', 'saving'].includes(r.state) && !r.error));
+  while ((busy().length || remoteSinks.size || remoteClosing.size) && Date.now() - t0 < maxMs) await sleep(500);
+  return busy().map((p) => p.name);
+}
+
+let driveWait = null;
+function driveReady() {
+  if (drive.connected) return Promise.resolve();
+  if (!driveWait) driveWait = new Promise((resolve) => {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.style.cssText = 'display:flex;gap:12px;align-items:center;border-color:#ff9f0a';
+    t.innerHTML = '<span>⚠ Il collegamento a Google Drive è scaduto: serve per i file nuovi (ospiti che entrano, schermi condivisi).</span><button class="btn sm primary">Ricollega Drive</button>';
+    document.body.append(t);
+    t.querySelector('button').onclick = async () => {
+      try { await drive.connect(''); t.remove(); driveWait = null; resolve(); toast('Google Drive ricollegato ✓'); }
+      catch (e) { toast('Drive: ' + e.message, 6000); }
+    };
+  });
+  return driveWait;
 }
 
 function makeSinkFor(name) {
   const rec = live.rec;
   return async (part, type) => {
-    if (rec.dest === 'drive') return new DriveSink(await drive.createUpload(`${name}.${type.ext}`, type.base, rec.folderId));
+    if (rec.dest === 'drive') { await driveReady(); return new DriveSink(await drive.createUpload(`${name}.${type.ext}`, type.base, rec.folderId)); }
     return new LocalSink(rec.dir, `${name}_parte${String(part).padStart(2, '0')}.${type.ext}`);
   };
 }
@@ -397,6 +427,7 @@ async function onRecRequest(from, m) {
   if (!p || !rec || rec.dest !== 'drive' || m.session !== rec.session) return;
   try {
     const name = safeName(p.name) + (m.kind === 'screen' ? '_schermo' : '');
+    await driveReady();
     const url = await drive.createUpload(`${name}.${m.ext}`, m.mime, rec.folderId);
     signal.send({ to: from, type: 'rec-url', kind: m.kind, session: rec.session, url });
   } catch (e) {
@@ -405,8 +436,10 @@ async function onRecRequest(from, m) {
 }
 
 // l'ospite manda i pezzi alla regia, che li scrive nella cartella scelta
+const remoteId = (from, key) => `${safeName(peers.get(from)?.name)}|${key}`;
+
 function onRemoteChunk(from, m) {
-  const id = `${from}|${m.key}`;
+  const id = remoteId(from, m.key);
   let w = remoteSinks.get(id);
   if (!w) {
     const [session, kind, part, ext] = String(m.key).split('|');
@@ -422,10 +455,12 @@ function onRemoteChunk(from, m) {
 }
 
 function onRemoteEnd(from, m) {
-  const id = `${from}|${m.key}`;
+  const id = remoteId(from, m.key);
   const w = remoteSinks.get(id);
   if (!w) return;
-  w.p = w.p.then(() => w.sink.close()).catch(() => {});
+  const done = (w.p = w.p.then(() => w.sink.close()).catch(() => {}));
+  remoteClosing.add(done);
+  done.finally(() => remoteClosing.delete(done));
   remoteSinks.delete(id);
 }
 
@@ -540,6 +575,7 @@ function tick(frame) {
     $('#masterMeter').style.width = `${Math.round(mixer.masterLevel() * 100)}%`;
   }
   if (frame % 15 === 0) updateRecTimer();
+  if (frame % 90 === 0 && live.rec?.dest === 'drive' && !drive.connected) driveReady();
 }
 
 // ---------- interfaccia ----------
@@ -690,7 +726,7 @@ function buildUI() {
 
   document.addEventListener('visibilitychange', () => $('#hiddenWarn').classList.toggle('hidden', !document.hidden));
   window.addEventListener('beforeunload', (e) => {
-    if (live.rec || [...peers.values()].some((p) => p.role === 'output')) { e.preventDefault(); e.returnValue = ''; }
+    if (live.rec || live.saving || [...peers.values()].some((p) => p.role === 'output')) { e.preventDefault(); e.returnValue = ''; }
   });
   renderIcons();
   updateHostButtons();
@@ -827,7 +863,7 @@ function updateCard(s) {
 
   const flags = [];
   const p = peers.get(s.owner);
-  const rec = s.owner === 'host' ? s.recStatus : p?.rec;
+  const rec = s.owner === 'host' ? s.recStatus : p?.rec?.[s.kind];
   if (live.rec && rec) {
     if (rec.error) flags.push(`<span class="e" title="${escapeHtml(rec.error)}">⚠ REC</span>`);
     else if (rec.state === 'rec') flags.push(`<span class="r">● REC</span>`);
